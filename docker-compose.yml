@@ -1,0 +1,200 @@
+version: "3"
+services:
+
+    airflow-webserver:
+        hostname: airflow
+        container_name: airflow
+        image: andrejunior/airflow-spark:latest
+        restart: always
+        networks:
+            - airflow
+        depends_on:
+            - postgres
+            - minio
+            - spark-node-master
+            - spark-worker
+        environment:   
+            - AIRFLOW__CORE__LOAD_EXAMPLES=False
+            - LOAD_EX=n
+            - EXECUTOR=Local    
+        volumes:
+            - airflow-data:/usr/local/airflow/data
+            - ./src/dags:/usr/local/airflow/dags
+            - ./src/spark/applications:/usr/local/spark/applications            
+            - ./src/spark/assets:/usr/local/spark/assets     
+        ports:
+            - "8085:8080" #8085
+        command: webserver
+        healthcheck:
+            test: ["CMD-SHELL", "[ -f /usr/local/airflow/airflow-webserver.pid ]"]
+            interval: 30s
+            timeout: 30s
+            retries: 3
+
+    postgres:
+        hostname: postgres
+        container_name: postgres
+        image: 'postgres:14-bullseye'
+        environment:
+            POSTGRES_USER: 'airflow'
+            POSTGRES_PASSWORD: 'airflow'
+            POSTGRES_DB: 'airflow'
+            PGDATA: /data/postgres
+        volumes:
+            - postgres:/data/postgres
+        ports:
+            - "5432:5432"
+        networks:
+            - airflow
+        restart: on-failure
+        healthcheck:
+            test: ["CMD", "pg_isready"]
+            interval: 60s
+            timeout: 20s
+            retries: 3
+        deploy:
+          resources:
+            limits:
+              memory: 400MB
+
+    mongo:
+        image: mongo
+        restart: always
+        ports:
+          - 2717:27017
+        networks:
+          - airflow
+        environment:
+          MONGO_INITDB_ROOT_USERNAME: airflow
+          MONGO_INITDB_ROOT_PASSWORD: airflow
+
+
+    mongo-express:
+        image: mongo-express
+        restart: always
+        ports:
+          - 8686:8686
+        depends_on:
+          - mongo
+        environment:
+          ME_CONFIG_MONGODB_ADMINUSERNAME: airflow
+          ME_CONFIG_MONGODB_ADMINPASSWORD: aiwflow
+          ME_CONFIG_MONGODB_URL: mongodb://airflow:airflow@mongo:27017/
+        networks:
+          - airflow
+
+    minio:
+        hostname: minio
+        image: "minio/minio"
+        container_name: minio
+        ports:
+          - "9001:9001"
+          - "9000:9000"
+        command: [ "server", "/data", "--console-address", ":9001" ]
+        volumes:
+          - ./minio:/data
+        environment:
+          - MINIO_ROOT_USER=minio
+          - MINIO_ROOT_PASSWORD=minio123
+          - MINIO_ACCESS_KEY=minio
+          - MINIO_SECRET_KEY=minio123
+        networks:
+          - airflow
+
+    mc:
+      image: minio/mc
+      container_name: mc
+      hostname: mc
+      environment:
+        - AWS_ACCESS_KEY_ID=minio
+        - AWS_SECRET_ACCESS_KEY=minio123
+        - AWS_REGION=us-east-1
+      entrypoint: >
+        /bin/sh -c " until (/usr/bin/mc config host add minio http://minio:9000 minio minio123) do echo '...waiting...' && sleep 1; done; /usr/bin/mc mb minio/raw;  /usr/bin/mc policy set public minio/raw; exit 0; "    
+      depends_on:
+        - minio
+      networks:
+        - airflow
+
+    #spark-master:        
+    #    image: bitnami/spark:3.2.1
+    #    user: root 
+    #    hostname: spark
+    #    container_name: spark
+    #    networks:
+    #        - airflow
+    #    environment:
+    #        - SPARK_MODE=master
+    #        - SPARK_RPC_AUTHENTICATION_ENABLED=no
+    #        - SPARK_RPC_ENCRYPTION_ENABLED=no
+    #        - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+    #        - SPARK_SSL_ENABLED=no
+    #    volumes:
+    #        - ./src/spark/applications:/usr/local/spark/applications            
+    #        - ./src/spark/assets:/usr/local/spark/assets 
+    #    ports:
+    #        - "8081:8080"
+    #        - "7077:7077"
+    #    deploy:
+    #      resources:
+    #        limits:
+    #          memory: 500MB
+    spark-node-master:
+        build:
+          context: ./spark
+          dockerfile: Dockerfile
+        user: root 
+        container_name: spark
+        networks:
+            - airflow
+        environment:
+            - SPARK_MODE=master
+            - SPARK_RPC_AUTHENTICATION_ENABLED=no
+            - SPARK_RPC_ENCRYPTION_ENABLED=no
+            - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+            - SPARK_SSL_ENABLED=no
+        volumes:
+            - ./src/spark/applications:/usr/local/spark/applications            
+            - ./src/spark/assets:/usr/local/spark/assets 
+        ports:
+            - "8081:8080"
+            - "7077:7077"
+        deploy:
+          resources:
+            limits:
+              memory: 500MB
+      
+    spark-worker:
+        image: bitnami/spark:3.2.1
+        user: root
+        hostname: spark-worker
+        container_name: spark-worker
+        networks:
+            - airflow
+        environment:
+            - SPARK_MODE=worker
+            - SPARK_MASTER_URL=spark://spark:7077
+            - SPARK_WORKER_MEMORY=1G
+            - SPARK_WORKER_CORES=1
+            - SPARK_RPC_AUTHENTICATION_ENABLED=no
+            - SPARK_RPC_ENCRYPTION_ENABLED=no
+            - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+            - SPARK_SSL_ENABLED=no
+        volumes:
+            - ./src/spark/applications:/usr/local/spark/applications            
+            - ./src/spark/assets:/usr/local/spark/assets 
+        depends_on:
+            - spark-node-master
+        deploy:
+          resources:
+            limits:
+              memory: 1GB
+
+volumes:
+    postgres:
+    airflow-data:
+    minio_data:
+
+networks:
+    airflow:
+        driver: bridge
