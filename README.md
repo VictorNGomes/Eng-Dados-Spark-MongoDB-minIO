@@ -1,6 +1,5 @@
-# Projeto de Automação de Atualização de Notícias Tecnológicas - Readme
+# Projeto de Automação de Atualização de Notícias Tecnológicas 
 
-Este é o readme.md do Projeto de Automação de Atualização de Notícias Tecnológicas. Aqui você encontrará informações sobre a descrição do projeto, detalhes da implementação da infraestrutura, conjunto de dados escolhido, resultados obtidos, dificuldades encontradas e ferramentas utilizadas.
 
 ## Descrição do Projeto
 
