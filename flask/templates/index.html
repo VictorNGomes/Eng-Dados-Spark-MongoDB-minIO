@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Notícias Tecnologicas</title>
+</head>
+<body>
+    <h1>Notícias</h1>
+    <ul>
+        {% for item in news %}
+        <li>
+            <h2>{{ item.main }}</h2>
+            <p>{{ item.web_url}}</p>
+        </li>
+        {% endfor %}
+    </ul>
+</body>
+</html>

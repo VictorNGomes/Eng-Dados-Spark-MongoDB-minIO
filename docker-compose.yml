@@ -82,6 +82,19 @@ services:
           ME_CONFIG_MONGODB_URL: mongodb://airflow:airflow@mongo:27017/
         networks:
           - airflow
+          
+    web-server:
+      build:
+        context: ./flask
+        dockerfile: Dockerfile
+      ports:
+        - 5000:5000
+      user: root 
+      container_name: web-server-flask
+      networks:
+        - airflow
+      
+    
 
     minio:
         hostname: minio
